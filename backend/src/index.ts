@@ -4,6 +4,7 @@ import cors from 'cors';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import routes from './routes';
+import { ensureUserId } from './middleware/userIdentification';
 
 // Load environment variables
 dotenv.config();
@@ -14,7 +15,8 @@ const port = process.env.PORT || 3000;
 // Middleware
 app.use(cors({
     origin: 'http://localhost:5173', // Vite's default port
-    credentials: true
+    credentials: true,
+    exposedHeaders: ['X-User-Id'] // Expose the user ID header
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -31,6 +33,9 @@ app.use(session({
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
+
+// User identification middleware
+app.use(ensureUserId);
 
 // Routes
 app.use('/api', routes);

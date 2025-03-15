@@ -1,0 +1,80 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Session model to track active listening rooms
+model Session {
+  id          String   @id @default(uuid())
+  name        String // Name of the session/room
+  hostId      String? // Optional ID of the host user
+  deviceId    String? // Spotify device ID for playback
+  accessToken String? // Current Spotify access token (encrypted)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  queue         QueueItem[]
+  currentSong   Song?       @relation("CurrentSong", fields: [currentSongId], references: [id])
+  currentSongId String?
+
+  @@index([isActive])
+}
+
+// Song model to store song metadata
+model Song {
+  id         String   @id // Spotify track ID
+  title      String
+  artist     String
+  albumArt   String
+  uri        String // Spotify URI for playback
+  durationMs Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  queueItems QueueItem[]
+  sessions   Session[]   @relation("CurrentSong")
+}
+
+// QueueItem model to track songs in the queue with votes
+model QueueItem {
+  id        String   @id @default(uuid())
+  votes     Int      @default(0)
+  played    Boolean  @default(false)
+  addedAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  song      Song    @relation(fields: [songId], references: [id])
+  songId    String
+  session   Session @relation(fields: [sessionId], references: [id])
+  sessionId String
+
+  // User votes tracking (simplified for now)
+  voterIds String[] @default([])
+
+  @@index([sessionId, played])
+  @@index([votes])
+}
+
+// PlaybackState model to store current playback information
+model PlaybackState {
+  id        String   @id @default(uuid())
+  sessionId String   @unique
+  isPlaying Boolean  @default(false)
+  progress  Int      @default(0) // Progress in milliseconds
+  volume    Int      @default(100) // Volume as percentage
+  updatedAt DateTime @updatedAt
+}
