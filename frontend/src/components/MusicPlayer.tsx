@@ -9,6 +9,7 @@ export const MusicPlayer = () => {
   const [showVolume, setShowVolume] = useState(false);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Initialize Spotify playback state
   useEffect(() => {
@@ -65,7 +66,7 @@ export const MusicPlayer = () => {
 
     const updateProgress = async () => {
       try {
-        if (state.isPlaying) {
+        if (state.isPlaying && !isTransitioning) {
           // Update local progress based on elapsed time
           const now = Date.now();
           const elapsed = (now - lastUpdateTime) / 1000;
@@ -77,10 +78,16 @@ export const MusicPlayer = () => {
             let playback = await spotifyService.getCurrentPlayback();
 
             // If the song has ended, play the next highest voted song
-            if (localProgress >= state.duration && state.deviceId) {
+            if (
+              localProgress >= state.duration &&
+              state.deviceId &&
+              !isTransitioning
+            ) {
               console.log(
                 "[Song End] Current song ended, finding next highest voted song"
               );
+              setIsTransitioning(true);
+
               // Get the next highest voted song from the queue
               const nextSong = state.queue
                 .filter((song) => song.id !== state.currentSong?.id)
@@ -131,6 +138,9 @@ export const MusicPlayer = () => {
                       );
                     }
                   }
+
+                  // Reset transition flag after successful playback update
+                  setIsTransitioning(false);
                 } catch (err) {
                   console.error(
                     "[Auto Play Error] Failed to play next song:",
@@ -139,7 +149,10 @@ export const MusicPlayer = () => {
                   setError(
                     "Failed to play next song. Please ensure you have an active Spotify device."
                   );
+                  setIsTransitioning(false);
                 }
+              } else {
+                setIsTransitioning(false);
               }
             }
 
@@ -150,6 +163,7 @@ export const MusicPlayer = () => {
                 playbackItemId: playback.item.id,
                 isPlaying: playback.is_playing,
                 progress: playback.progress_ms,
+                isTransitioning,
               });
 
               if (
@@ -189,17 +203,6 @@ export const MusicPlayer = () => {
                   type: "SET_IS_PLAYING",
                   payload: playback.is_playing,
                 });
-
-                // If this was an automatic transition (song ended), remove it from queue
-                if (localProgress >= state.duration) {
-                  console.log("[Queue Update] Removing played song from queue");
-                  dispatch({
-                    type: "SET_QUEUE",
-                    payload: state.queue.filter(
-                      (song) => song.id !== newSong.id
-                    ),
-                  });
-                }
 
                 // Reset local progress to match Spotify's state
                 localProgress = playback.progress_ms / 1000;
@@ -250,6 +253,7 @@ export const MusicPlayer = () => {
     state.progress,
     state.currentSong,
     state.queue,
+    isTransitioning,
   ]);
 
   const handleProgressClick = useCallback(
